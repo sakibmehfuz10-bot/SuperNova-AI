@@ -63,21 +63,18 @@ export class GeminiService {
   private ai: GoogleGenAI;
 
   constructor() {
-    // Vite Standard: import.meta.env handles both Local and Vercel environments correctly.
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY || "";
-    
+    console.log("Using API Key:", apiKey ? "Found" : "Missing");
     if (!apiKey) {
-      console.error("CRITICAL ERROR: Gemini API key is missing. Ensure VITE_GEMINI_API_KEY is set in Vercel.");
+      console.warn("Gemini API key is missing. Please set VITE_GEMINI_API_KEY or GEMINI_API_KEY.");
     }
-    
     this.ai = new GoogleGenAI({ apiKey });
   }
 
   async generateSpeech(text: string, voiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr' = 'Kore') {
     try {
       const response = await this.ai.models.generateContent({
-        // Using stable flash model for speech to ensure quota availability
-        model: "gemini-1.5-flash", 
+        model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text }] }],
         config: {
           responseModalities: [Modality.AUDIO],
@@ -96,7 +93,7 @@ export class GeminiService {
       return null;
     } catch (error) {
       console.error("TTS Error:", error);
-      return null; // Graceful failure for TTS
+      throw error;
     }
   }
 
@@ -114,11 +111,12 @@ export class GeminiService {
       npcPersona?: string;
     }
   ) {
-    // STABLE MODEL: gemini-1.5-flash provides the best free-tier stability and speed.
-    const modelName = "gemini-1.5-flash";
+    // Use gemini-flash-latest as the stable, free-tier compatible model.
+    // Note: gemini-1.5-flash is strictly prohibited/deprecated by the platform.
+    const modelName = "gemini-flash-latest";
     
     let systemInstruction = options.npcPersona || SYSTEM_PROMPT;
-    systemInstruction += "\n\nCRITICAL: Keep your responses concise, well-structured, and accurate.";
+    systemInstruction += "\n\nCRITICAL: Keep your responses concise, well-structured, and within reasonable token limits. Avoid overly verbose explanations.";
     
     if (!options.npcPersona && (options.depth || options.tone || options.format)) {
       systemInstruction += `\n\nOutput Constraints:\n`;
@@ -132,22 +130,26 @@ export class GeminiService {
       tools: []
     };
 
-    // Correctly push tools based on mode
     if (options.mode === "research") {
       config.tools.push({ googleSearch: {} });
     } else {
-      config.tools.push({ googleSearch: {} });
+      config.tools.push({ googleSearch: {} }, { urlContext: {} });
     }
 
+    // Thinking is not applicable for flash models
+    
     const contents: any[] = history.map(m => ({
       role: m.role === "user" ? "user" : "model",
       parts: [{ text: m.content }]
     }));
 
+    // Add India knowledge bases to the first message part if history is empty, 
+    // or just include them in the prompt context.
     const currentParts: any[] = [{ text: message }];
     
+    // We add the URLs to the prompt to trigger urlContext
     if (history.length === 0) {
-      currentParts[0].text = `Context: Answer based on top Indian knowledge bases where applicable.\n\nQuery: ${message}`;
+      currentParts[0].text = `Context: Ground your response in the following knowledge bases where applicable: ${INDIA_KNOWLEDGE_BASES.join(", ")}\n\nQuery: ${message}`;
     }
 
     if (options.image) {
@@ -170,6 +172,7 @@ export class GeminiService {
 
       let text = response.text || "I'm sorry, I couldn't generate a response.";
       
+      // Extract grounding sources if available
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
       if (chunks && chunks.length > 0) {
         const sources = chunks
