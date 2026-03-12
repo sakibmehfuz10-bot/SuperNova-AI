@@ -46,6 +46,7 @@ import { GeminiService, Message } from "./services/geminiService";
 import { ChatProvider, useChat, ChatHistoryItem, Model } from "./contexts/ChatContext";
 import { TaskManagement } from "./components/TaskManagement";
 import { AboutUs } from "./components/AboutUs";
+import { Logo } from "./components/Logo";
 import { NPCGame } from "./components/NPCGame";
 import { ResearchMoodFutures } from "./components/ResearchMoodFutures";
 import { LandingPage } from "./components/LandingPage";
@@ -796,9 +797,7 @@ const SuperNovaApp = () => {
         className="flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--border-main)] overflow-hidden whitespace-nowrap"
       >
         <div className="p-5 flex items-center gap-3 border-b border-[var(--border-main)]">
-          <div className="w-8 h-8 rounded-full bg-[var(--accent-main)]/10 flex items-center justify-center border border-[var(--accent-main)]/30">
-            <Sparkles className="w-4 h-4 text-[var(--accent-main)]" />
-          </div>
+          <Logo className="w-8 h-8" />
           <h1 className="text-lg font-serif font-semibold tracking-tight">
             Super<span className="text-[var(--accent-main)]">Nova</span> AI
           </h1>

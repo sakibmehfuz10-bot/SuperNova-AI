@@ -63,7 +63,11 @@ export class GeminiService {
   private ai: GoogleGenAI;
 
   constructor() {
-    this.ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
+    if (!apiKey) {
+      console.warn("Gemini API key is missing. Please set VITE_GEMINI_API_KEY or GEMINI_API_KEY.");
+    }
+    this.ai = new GoogleGenAI({ apiKey });
   }
 
   async generateSpeech(text: string, voiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr' = 'Kore') {
