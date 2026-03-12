@@ -110,14 +110,12 @@ export class GeminiService {
       npcPersona?: string;
     }
   ) {
-    let modelName = options.model || "gemini-3-flash-preview";
-    
-    // Ensure we are not using deprecated models
-    if (modelName === "gemini-1.5-flash" || modelName === "gemini-1.5-pro" || modelName === "gemini-pro") {
-      modelName = "gemini-3-flash-preview";
-    }
+    // Strictly use gemini-3-flash-preview to avoid quota issues and deprecated models
+    const modelName = "gemini-3-flash-preview";
     
     let systemInstruction = options.npcPersona || SYSTEM_PROMPT;
+    systemInstruction += "\n\nCRITICAL: Keep your responses concise, well-structured, and within reasonable token limits. Avoid overly verbose explanations.";
+    
     if (!options.npcPersona && (options.depth || options.tone || options.format)) {
       systemInstruction += `\n\nOutput Constraints:\n`;
       if (options.depth) systemInstruction += `- Depth: ${options.depth}\n`;
@@ -131,16 +129,13 @@ export class GeminiService {
     };
 
     if (options.mode === "research") {
-      modelName = "gemini-3-flash-preview";
       config.tools.push({ googleSearch: {} });
     } else {
       config.tools.push({ googleSearch: {} }, { urlContext: {} });
     }
 
-    if (options.useThinking && modelName.includes("pro")) {
-      config.thinkingConfig = { thinkingLevel: ThinkingLevel.HIGH };
-    }
-
+    // Thinking is not applicable for flash models
+    
     const contents: any[] = history.map(m => ({
       role: m.role === "user" ? "user" : "model",
       parts: [{ text: m.content }]
