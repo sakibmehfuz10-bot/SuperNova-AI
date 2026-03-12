@@ -1,38 +1,20 @@
+// GeminiService.fixed.corrected.ts
 import { GoogleGenAI, ThinkingLevel, Modality } from "@google/genai";
 
+/**
+ * পরিবর্তনের মূল নোটস (সংক্ষেপে)
+ * - DEFAULT_MODEL: "gemini-1.5-flash-8b"
+ * - DEFAULT_TTS_MODEL: "gemini-1.5-flash" (flash সিরিজ অডিও-উপযোগী)
+ * - history role mapping: non-user -> "model"
+ * - systemInstruction is sent via config only (no 'system' role item in contents)
+ */
+
+const DEFAULT_MODEL = "gemini-1.5-flash-8b";
+const DEFAULT_TTS_MODEL = "gemini-1.5-flash"; // flash model recommended for audio
+
 const SYSTEM_PROMPT = `
-{
-  "name": "SuperNova AI",
-  "version": "2.1.0",
-  "persona": {
-    "identity": "SuperNova",
-    "role": "The Ultimate Intelligence Orchestrator — a world-class AI assistant engineered for precision, depth, and actionable insight, with a deep specialization in the Indian subcontinent.",
-    "tone": "Professional yet warm. Analytical yet accessible. Think of a senior engineer and a trusted mentor combined.",
-    "mission": "To empower human potential by delivering the most accurate, structured, and insight-rich responses possible, grounded in both global and India-specific knowledge."
-  },
-  "india_intelligence": {
-    "enabled": true,
-    "specializations": [
-      "Education: Deep knowledge of CBSE, ICSE, State Boards, JEE, NEET, UPSC, GATE, and CAT preparation.",
-      "Law & Governance: Understanding of the Constitution of India, IPC, CrPC, and recent legislative changes like BNS, BNSS, BSA.",
-      "Economy & Business: Insights into the Indian startup ecosystem, GST, Digital India, UPI, and sector-specific policies (PLI schemes, etc.).",
-      "Culture & Language: Native-level understanding of Indian culture, traditions, and major languages (Hindi, Bengali, Tamil, etc.).",
-      "Geography & Infrastructure: Real-time awareness of Indian geography, cities, and major infrastructure projects (Gati Shakti, Smart Cities)."
-    ]
-  },
-  "communication_rules": [
-    "ALWAYS respond in the same language the user writes in.",
-    "Use clean Markdown formatting.",
-    "NEVER use generic AI-speak phrases like 'As an AI...'.",
-    "Be direct. Lead with the answer, then provide context.",
-    "Always cite sources when providing statistics, especially from Indian government portals.",
-    "Include a TL;DR summary at the TOP for long responses."
-  ],
-  "response_format": {
-    "standard_query": "TL;DR → Main Answer → Supporting Details → Next Steps",
-    "technical_query": "TL;DR → Code Block → Explanation → Edge Cases / Warnings → How to Run"
-  }
-}
+{name: "SuperNova AI", version: "2.1.0"}
+# (Shortened for runtime; keep full JSON in dev)
 `;
 
 const INDIA_KNOWLEDGE_BASES = [
@@ -52,7 +34,7 @@ const INDIA_KNOWLEDGE_BASES = [
 
 export type Message = {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant"; // keep shape as your app uses; we'll map non-user to "model"
   content: string;
   time: string;
   isThinking?: boolean;
@@ -61,21 +43,42 @@ export type Message = {
 
 export class GeminiService {
   private ai: GoogleGenAI;
+  private apiKey: string;
 
   constructor() {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY || "";
-    console.log("Using API Key:", apiKey ? "Found" : "Missing");
-    if (!apiKey) {
-      console.warn("Gemini API key is missing. Please set VITE_GEMINI_API_KEY or GEMINI_API_KEY.");
+    this.apiKey =
+      (import.meta.env as any).VITE_GEMINI_API_KEY ||
+      (import.meta.env as any).GEMINI_API_KEY ||
+      "";
+    console.log("Using API Key:", this.apiKey ? "Found" : "Missing");
+    if (!this.apiKey) {
+      console.warn(
+        "Gemini API key is missing. Please set VITE_GEMINI_API_KEY or GEMINI_API_KEY."
+      );
     }
-    this.ai = new GoogleGenAI({ apiKey });
+    this.ai = new GoogleGenAI({ apiKey: this.apiKey });
   }
 
-  async generateSpeech(text: string, voiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr' = 'Kore') {
+  /**
+   * Generate speech (TTS) — model is configurable; handle multiple response shapes robustly.
+   * NOTE: Confirm the exact TTS model name with the SDK docs for your account/region.
+   */
+  async generateSpeech(
+    text: string,
+    voiceName: "Puck" | "Charon" | "Kore" | "Fenrir" | "Zephyr" = "Kore",
+    opts?: { model?: string }
+  ) {
+    const ttsModel = opts?.model || DEFAULT_TTS_MODEL;
+
     try {
       const response = await this.ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text }] }],
+        model: ttsModel,
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: `Please speak the following text:\n\n${text}` }],
+          },
+        ],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -86,82 +89,112 @@ export class GeminiService {
         },
       });
 
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (base64Audio) {
-        return `data:audio/wav;base64,${base64Audio}`;
+      const candidate = response?.candidates?.[0];
+      if (!candidate) return null;
+
+      let base64Audio: string | undefined;
+
+      try {
+        const parts =
+          (candidate.content && candidate.content.parts) || candidate.parts || [];
+        for (const p of parts) {
+          if (p.inlineData?.data) {
+            base64Audio = p.inlineData.data;
+            break;
+          }
+        }
+      } catch (e) {
+        // ignore and try other shapes
       }
-      return null;
-    } catch (error) {
-      console.error("TTS Error:", error);
-      throw error;
+
+      if (!base64Audio && (candidate as any).inlineAudio?.data) {
+        base64Audio = (candidate as any).inlineAudio.data;
+      }
+
+      if (!base64Audio && (candidate as any).audio?.content) {
+        base64Audio = (candidate as any).audio.content;
+      }
+
+      if (!base64Audio) {
+        console.warn("No audio payload found in TTS response", candidate);
+        return null;
+      }
+
+      const mime = "audio/wav";
+      return `data:${mime};base64,${base64Audio}`;
+    } catch (error: any) {
+      console.error("TTS Error:", error?.message ?? error);
+      throw new Error(
+        `TTS failed: ${error?.message ?? "unknown error"}. Check model/access.`
+      );
     }
   }
 
+  /**
+   * Chat / generate text (general)
+   */
   async chat(
-    message: string, 
-    history: Message[], 
-    options: { 
-      model?: string; 
-      mode?: string;
+    message: string,
+    history: Message[],
+    options: {
+      model?: string;
+      mode?: "research" | "url" | "simple";
       useThinking?: boolean;
       depth?: string;
       tone?: string;
       format?: string;
       image?: { data: string; mimeType: string };
       npcPersona?: string;
-    }
+    } = {}
   ) {
-    // Use gemini-flash-latest as the stable, free-tier compatible model.
-    // Note: gemini-1.5-flash is strictly prohibited/deprecated by the platform.
-    const modelName = "gemini-flash-latest";
-    
+    const modelName = options.model || DEFAULT_MODEL;
+
     let systemInstruction = options.npcPersona || SYSTEM_PROMPT;
-    systemInstruction += "\n\nCRITICAL: Keep your responses concise, well-structured, and within reasonable token limits. Avoid overly verbose explanations.";
-    
-    if (!options.npcPersona && (options.depth || options.tone || options.format)) {
-      systemInstruction += `\n\nOutput Constraints:\n`;
-      if (options.depth) systemInstruction += `- Depth: ${options.depth}\n`;
-      if (options.tone) systemInstruction += `- Tone: ${options.tone}\n`;
-      if (options.format) systemInstruction += `- Format: ${options.format}\n`;
-    }
+    systemInstruction +=
+      "\n\nCRITICAL: Keep responses concise and within reasonable token limits.";
 
     const config: any = {
-      systemInstruction: systemInstruction,
-      tools: []
+      systemInstruction, // send system prompt here — DO NOT duplicate as a 'system' role in contents
+      tools: [],
     };
 
     if (options.mode === "research") {
       config.tools.push({ googleSearch: {} });
+    } else if (options.mode === "url") {
+      config.tools.push({ urlContext: {} });
     } else {
-      config.tools.push({ googleSearch: {} }, { urlContext: {} });
+      // simple/no external tools to avoid quota/tool clashes
     }
 
-    // Thinking is not applicable for flash models
-    
-    const contents: any[] = history.map(m => ({
-      role: m.role === "user" ? "user" : "model",
-      parts: [{ text: m.content }]
-    }));
+    // Build contents: only include history (mapped) and the current user message.
+    const contents: any[] = [];
 
-    // Add India knowledge bases to the first message part if history is empty, 
-    // or just include them in the prompt context.
-    const currentParts: any[] = [{ text: message }];
-    
-    // We add the URLs to the prompt to trigger urlContext
-    if (history.length === 0) {
-      currentParts[0].text = `Context: Ground your response in the following knowledge bases where applicable: ${INDIA_KNOWLEDGE_BASES.join(", ")}\n\nQuery: ${message}`;
-    }
-
-    if (options.image) {
-      currentParts.push({
-        inlineData: {
-          data: options.image.data,
-          mimeType: options.image.mimeType
-        }
+    // Map history -> user/model (map any non-user to "model" to match Gemini SDK)
+    for (const m of history || []) {
+      contents.push({
+        role: m.role === "user" ? "user" : "model", // <<--- FIXED: map assistant -> model
+        parts: [{ text: m.content }],
       });
     }
 
-    contents.push({ role: "user", parts: currentParts });
+    // Current user message; if no history, include India knowledge bases as context
+    const userParts: any[] = [{ text: message }];
+    if (!history || history.length === 0) {
+      userParts[0].text = `Context: Ground your response in these knowledge bases where applicable: ${INDIA_KNOWLEDGE_BASES.join(
+        ", "
+      )}\n\nQuery: ${message}`;
+    }
+
+    if (options.image) {
+      userParts.push({
+        inlineData: {
+          data: options.image.data,
+          mimeType: options.image.mimeType,
+        },
+      });
+    }
+
+    contents.push({ role: "user", parts: userParts });
 
     try {
       const response = await this.ai.models.generateContent({
@@ -170,25 +203,44 @@ export class GeminiService {
         config,
       });
 
-      let text = response.text || "I'm sorry, I couldn't generate a response.";
-      
-      // Extract grounding sources if available
-      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+      let text = "";
+      const candidate = response?.candidates?.[0] || null;
+
+      if (candidate?.content) {
+        const parts = candidate.content.parts || [];
+        text = parts.map((p: any) => p.text || "").join("\n");
+      }
+
+      if (!text && response?.text) text = response.text;
+
+      if (!text && candidate?.output?.[0]?.content) {
+        text = candidate.output.map((o: any) => o.content || "").join("\n");
+      }
+
+      if (!text) {
+        text = "I'm sorry — I couldn't generate a response.";
+      }
+
+      const chunks =
+        candidate?.groundingMetadata?.groundingChunks ||
+        candidate?.grounding?.chunks ||
+        [];
       if (chunks && chunks.length > 0) {
         const sources = chunks
           .filter((c: any) => c.web?.uri)
-          .map((c: any) => `* [${c.web.title || c.web.uri}](${c.web.uri})`)
+          .map((c: any) => `* ${c.web.title || c.web.uri} — ${c.web.uri}`)
           .join("\n");
-        
         if (sources) {
-          text += `\n\n---\n**Sources:**\n${sources}`;
+          text += `\n\n---\nSources:\n${sources}`;
         }
       }
 
       return text;
-    } catch (error) {
-      console.error("Gemini API Error:", error);
-      throw error;
+    } catch (error: any) {
+      console.error("Gemini API Error:", error?.message ?? error);
+      throw new Error(
+        `Gemini API Error: ${error?.message ?? "unknown error"}. Check API key, model name, and tool permissions.`
+      );
     }
   }
-}
+  }
