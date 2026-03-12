@@ -36,7 +36,7 @@ interface ChatContextType {
   isImageLoading: boolean;
   activeArtifact: string | null;
   artifactOpen: boolean;
-  
+
   fetchChats: () => Promise<void>;
   loadChat: (chatId: number) => Promise<void>;
   createNewChat: () => Promise<void>;
@@ -44,7 +44,7 @@ interface ChatContextType {
   deleteChat: (chatId: number) => Promise<void>;
   handleSend: (text?: string) => Promise<void>;
   handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  
+
   setUploadedImage: (img: { data: string; mimeType: string } | null) => void;
   setSelectedModel: (model: Model) => void;
   setIntelligenceMode: (mode: IntelligenceMode) => void;
@@ -77,17 +77,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode; user: any }> = 
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     }
   ]);
-  const [isTyping, setIsTyping] = useState(false);
+  const[isTyping, setIsTyping] = useState(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<Model>({ id: "gemini-3.1-pro-preview", name: "SuperNova Pro", icon: null, desc: "" });
+  
+  // ৩. মডেল আইডি পরিবর্তন করা হয়েছে (gemini-1.5-pro)
+  const [selectedModel, setSelectedModel] = useState<Model>({ id: "gemini-1.5-pro", name: "SuperNova Pro", icon: null, desc: "" });
+  
   const [intelligenceMode, setIntelligenceMode] = useState<IntelligenceMode>("general");
-  const [useThinking, setUseThinking] = useState(false);
+  const[useThinking, setUseThinking] = useState(false);
   const [outputDepth, setOutputDepth] = useState<OutputDepth>("standard");
   const [outputTone, setOutputTone] = useState<OutputTone>("professional");
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("markdown");
-  const [uploadedImage, setUploadedImage] = useState<{ data: string; mimeType: string } | null>(null);
+  const[uploadedImage, setUploadedImage] = useState<{ data: string; mimeType: string } | null>(null);
   const [isImageLoading, setIsImageLoading] = useState(false);
-  const [activeArtifact, setActiveArtifact] = useState<string | null>(null);
+  const[activeArtifact, setActiveArtifact] = useState<string | null>(null);
   const [artifactOpen, setArtifactOpen] = useState(false);
 
   const gemini = useRef(new GeminiService());
@@ -106,7 +109,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode; user: any }> = 
     const res = await fetch(`/api/chats/${chatId}/messages`);
     if (res.ok) {
       const data = await res.json();
-      setMessages(data.length > 0 ? data.map((m: any, i: number) => ({ ...m, id: i.toString() })) : [
+      setMessages(data.length > 0 ? data.map((m: any, i: number) => ({ ...m, id: i.toString() })) :[
         {
           id: "init",
           role: "assistant",
@@ -131,23 +134,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode; user: any }> = 
       return;
     }
 
-    const res = await fetch("/api/chats", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "New Conversation" })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setChatHistory([data, ...chatHistory]);
-      setActiveChatId(data.id);
-      setMessages([
-        {
-          id: "init",
-          role: "assistant",
-          content: "Hello! I'm SuperNova — your ultimate intelligence orchestrator. How can I empower your potential today?",
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        }
-      ]);
+    const res = await fetch("/api/chats", {  
+      method: "POST",  
+      headers: { "Content-Type": "application/json" },  
+      body: JSON.stringify({ title: "New Conversation" })  
+    });  
+    if (res.ok) {  
+      const data = await res.json();  
+      setChatHistory([data, ...chatHistory]);  
+      setActiveChatId(data.id);  
+      setMessages([  
+        {  
+          id: "init",  
+          role: "assistant",  
+          content: "Hello! I'm SuperNova — your ultimate intelligence orchestrator. How can I empower your potential today?",  
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),  
+        }  
+      ]);  
     }
   };
 
@@ -176,105 +179,113 @@ export const ChatProvider: React.FC<{ children: React.ReactNode; user: any }> = 
     const msg = text || "";
     if (!msg && !uploadedImage) return;
 
-    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: msg,
-      time,
-    };
+    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });  
+    const userMsg: Message = {  
+      id: Date.now().toString(),  
+      role: "user",  
+      content: msg,  
+      time,  
+    };  
 
-    setMessages(prev => [...prev, userMsg]);
-    setIsTyping(true);
-    const currentImage = uploadedImage;
-    setUploadedImage(null);
+    setMessages(prev => [...prev, userMsg]);  
+    setIsTyping(true);  
+    const currentImage = uploadedImage;  
+    setUploadedImage(null);  
 
-    let currentChatId = activeChatId;
+    let currentChatId = activeChatId;  
 
-    if (user && !currentChatId) {
-      const res = await fetch("/api/chats", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: msg.substring(0, 30) + (msg.length > 30 ? "..." : "") })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setChatHistory(prev => [data, ...prev]);
-        setActiveChatId(data.id);
-        currentChatId = data.id;
-      }
-    }
+    if (user && !currentChatId) {  
+      const res = await fetch("/api/chats", {  
+        method: "POST",  
+        headers: { "Content-Type": "application/json" },  
+        body: JSON.stringify({ title: msg.substring(0, 30) + (msg.length > 30 ? "..." : "") })  
+      });  
+      if (res.ok) {  
+        const data = await res.json();  
+        setChatHistory(prev => [data, ...prev]);  
+        setActiveChatId(data.id);  
+        currentChatId = data.id;  
+      }  
+    }  
 
-    if (user && currentChatId) {
-      await fetch(`/api/chats/${currentChatId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "user", content: msg, time })
-      });
-      
-      if (messages.length === 1 && !activeChatId) {
-        // Title already set
-      } else if (messages.length === 1) {
-        const newTitle = msg.length > 30 ? msg.substring(0, 30) + "..." : msg;
-        await fetch(`/api/chats/${currentChatId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: newTitle })
-        });
-        setChatHistory(prev => prev.map(c => c.id === currentChatId ? { ...c, title: newTitle } : c));
-      }
-    }
-
-    try {
-      const response = await gemini.current.chat(msg, messages, {
-        model: selectedModel.id,
-        mode: intelligenceMode,
-        useThinking,
-        depth: outputDepth,
-        tone: outputTone,
-        format: outputFormat,
-        image: currentImage || undefined
-      });
-
-      const codeBlockMatch = response.match(/```[\s\S]*?```/);
-      if (codeBlockMatch) {
-        setActiveArtifact(codeBlockMatch[0]);
-        setArtifactOpen(true);
-      }
-
-      const assistantMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: response,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        isThinking: useThinking
-      };
-
-      setMessages(prev => [...prev, assistantMsg]);
-
-      if (user && currentChatId) {
-        await fetch(`/api/chats/${currentChatId}/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: "assistant", content: response, time: assistantMsg.time })
-        });
-      }
-    } catch (error: any) {
-      const isQuotaError = error?.message === "QUOTA_EXHAUSTED" || error?.message?.includes("quota") || error?.message?.includes("429");
-      if (isQuotaError) setIsQuotaExceeded(true);
-      
-      const errorMessage = isQuotaError 
-        ? "### ⚠️ Quota Exhausted\nYou have reached the API quota limit for the shared key. \n\n**To continue with unlimited calls:**\n1. Click the **'Fix Quota (Add Key)'** button at the top right.\n2. Select your own Google AI Studio API key.\n3. If you don't have one, get it for free at [aistudio.google.com](https://aistudio.google.com/app/apikey)."
-        : "I encountered an error. Please check your API key or try again.";
+    if (user && currentChatId) {  
+      await fetch(`/api/chats/${currentChatId}/messages`, {  
+        method: "POST",  
+        headers: { "Content-Type": "application/json" },  
+        body: JSON.stringify({ role: "user", content: msg, time })  
+      });  
         
-      setMessages(prev => [...prev, {
-        id: "error",
-        role: "assistant",
-        content: errorMessage,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      }]);
-    } finally {
-      setIsTyping(false);
+      if (messages.length === 1 && !activeChatId) {  
+        // Title already set  
+      } else if (messages.length === 1) {  
+        const newTitle = msg.length > 30 ? msg.substring(0, 30) + "..." : msg;  
+        await fetch(`/api/chats/${currentChatId}`, {  
+          method: "PATCH",  
+          headers: { "Content-Type": "application/json" },  
+          body: JSON.stringify({ title: newTitle })  
+        });  
+        setChatHistory(prev => prev.map(c => c.id === currentChatId ? { ...c, title: newTitle } : c));  
+      }  
+    }  
+
+    try {  
+      // ১. আপনার নিজের সার্ভারকে কল করা হচ্ছে
+      const apiResponse = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: msg,
+          messages: messages, // চ্যাট হিস্ট্রি পাঠানো হচ্ছে
+          model: selectedModel.id,
+          mode: intelligenceMode,
+          useThinking: useThinking,
+          depth: outputDepth,
+          tone: outputTone,
+          format: outputFormat,
+          image: currentImage || undefined
+        })
+      });
+
+      if (!apiResponse.ok) throw new Error("SERVER_ERROR");
+
+      const data = await apiResponse.json();
+      const responseText = data.text; // আপনার server.ts থেকে আসা উত্তর
+
+      const codeBlockMatch = responseText.match(/```[\s\S]*?```/);  
+      if (codeBlockMatch) {  
+        setActiveArtifact(codeBlockMatch[0]);  
+        setArtifactOpen(true);  
+      }  
+
+      const assistantMsg: Message = {  
+        id: (Date.now() + 1).toString(),  
+        role: "assistant",  
+        content: responseText,  
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),  
+        isThinking: useThinking  
+      };  
+
+      setMessages(prev =>[...prev, assistantMsg]);  
+
+      if (user && currentChatId) {  
+        await fetch(`/api/chats/${currentChatId}/messages`, {  
+          method: "POST",  
+          headers: { "Content-Type": "application/json" },  
+          body: JSON.stringify({ role: "assistant", content: responseText, time: assistantMsg.time })  
+        });  
+      }  
+    } catch (error: any) {  
+      // ২. বিভ্রান্তিকর এরর মেসেজ মুছে সহজ মেসেজ দেওয়া হয়েছে
+      const errorMessage = "দুঃখিত, সুপারনোভা এই মুহূর্তে কানেক্ট করতে পারছে না। আপনার ইন্টারনেট বা সার্ভার চেক করুন।";
+          
+      setMessages(prev =>[...prev, {  
+        id: "error",  
+        role: "assistant",  
+        content: errorMessage,  
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),  
+      }]);  
+    } finally {  
+      setIsTyping(false);  
     }
   };
 
