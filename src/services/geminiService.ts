@@ -110,7 +110,7 @@ export class GeminiService {
       npcPersona?: string;
     }
   ) {
-    // Strictly use gemini-3-flash-preview to avoid quota issues and deprecated models
+    // Strictly use gemini-3-flash-preview as gemini-1.5-flash is prohibited.
     const modelName = "gemini-3-flash-preview";
     
     let systemInstruction = options.npcPersona || SYSTEM_PROMPT;
