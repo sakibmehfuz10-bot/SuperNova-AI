@@ -110,8 +110,9 @@ export class GeminiService {
       npcPersona?: string;
     }
   ) {
-    // Strictly use gemini-3-flash-preview as gemini-1.5-flash is prohibited.
-    const modelName = "gemini-3-flash-preview";
+    // Use gemini-flash-latest as the stable, free-tier compatible model.
+    // Note: gemini-1.5-flash is strictly prohibited/deprecated by the platform.
+    const modelName = "gemini-flash-latest";
     
     let systemInstruction = options.npcPersona || SYSTEM_PROMPT;
     systemInstruction += "\n\nCRITICAL: Keep your responses concise, well-structured, and within reasonable token limits. Avoid overly verbose explanations.";
