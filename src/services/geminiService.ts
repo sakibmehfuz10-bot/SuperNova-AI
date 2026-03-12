@@ -1,23 +1,14 @@
-// GeminiService.fixed.corrected.ts
-import { GoogleGenAI, ThinkingLevel, Modality } from "@google/genai";
-
-/**
- * পরিবর্তনের মূল নোটস (সংক্ষেপে)
- * - DEFAULT_MODEL: "gemini-1.5-flash-8b"
- * - DEFAULT_TTS_MODEL: "gemini-1.5-flash" (flash সিরিজ অডিও-উপযোগী)
- * - history role mapping: non-user -> "model"
- * - systemInstruction is sent via config only (no 'system' role item in contents)
- */
+import { GoogleGenAI } from "@google/genai";
 
 const DEFAULT_MODEL = "gemini-1.5-flash-8b";
-const DEFAULT_TTS_MODEL = "gemini-1.5-flash"; // flash model recommended for audio
+const DEFAULT_TTS_MODEL = "gemini-1.5-flash"; // Flash model is best for audio generation
 
 const SYSTEM_PROMPT = `
 {name: "SuperNova AI", version: "2.1.0"}
 # (Shortened for runtime; keep full JSON in dev)
 `;
 
-const INDIA_KNOWLEDGE_BASES = [
+const INDIA_KNOWLEDGE_BASES =[
   "https://www.india.gov.in",
   "https://pib.gov.in",
   "https://www.rbi.org.in",
@@ -34,7 +25,7 @@ const INDIA_KNOWLEDGE_BASES = [
 
 export type Message = {
   id: string;
-  role: "user" | "assistant"; // keep shape as your app uses; we'll map non-user to "model"
+  role: "user" | "assistant"; 
   content: string;
   time: string;
   isThinking?: boolean;
@@ -50,7 +41,9 @@ export class GeminiService {
       (import.meta.env as any).VITE_GEMINI_API_KEY ||
       (import.meta.env as any).GEMINI_API_KEY ||
       "";
+      
     console.log("Using API Key:", this.apiKey ? "Found" : "Missing");
+    
     if (!this.apiKey) {
       console.warn(
         "Gemini API key is missing. Please set VITE_GEMINI_API_KEY or GEMINI_API_KEY."
@@ -60,8 +53,7 @@ export class GeminiService {
   }
 
   /**
-   * Generate speech (TTS) — model is configurable; handle multiple response shapes robustly.
-   * NOTE: Confirm the exact TTS model name with the SDK docs for your account/region.
+   * Generate speech (TTS)
    */
   async generateSpeech(
     text: string,
@@ -76,11 +68,12 @@ export class GeminiService {
         contents: [
           {
             role: "user",
-            parts: [{ text: `Please speak the following text:\n\n${text}` }],
+            parts:[{ text: `Please speak the following text:\n\n${text}` }],
           },
         ],
         config: {
-          responseModalities: [Modality.AUDIO],
+          // Use string literal "AUDIO" to prevent enum export issues
+          responseModalities: ["AUDIO"], 
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: { voiceName },
@@ -94,25 +87,13 @@ export class GeminiService {
 
       let base64Audio: string | undefined;
 
-      try {
-        const parts =
-          (candidate.content && candidate.content.parts) || candidate.parts || [];
-        for (const p of parts) {
-          if (p.inlineData?.data) {
-            base64Audio = p.inlineData.data;
-            break;
-          }
+      // Extract Base64 Audio natively
+      const parts = candidate.content?.parts ||[];
+      for (const p of parts) {
+        if (p.inlineData?.data) {
+          base64Audio = p.inlineData.data;
+          break;
         }
-      } catch (e) {
-        // ignore and try other shapes
-      }
-
-      if (!base64Audio && (candidate as any).inlineAudio?.data) {
-        base64Audio = (candidate as any).inlineAudio.data;
-      }
-
-      if (!base64Audio && (candidate as any).audio?.content) {
-        base64Audio = (candidate as any).audio.content;
       }
 
       if (!base64Audio) {
@@ -120,8 +101,7 @@ export class GeminiService {
         return null;
       }
 
-      const mime = "audio/wav";
-      return `data:${mime};base64,${base64Audio}`;
+      return `data:audio/wav;base64,${base64Audio}`;
     } catch (error: any) {
       console.error("TTS Error:", error?.message ?? error);
       throw new Error(
@@ -154,30 +134,26 @@ export class GeminiService {
       "\n\nCRITICAL: Keep responses concise and within reasonable token limits.";
 
     const config: any = {
-      systemInstruction, // send system prompt here — DO NOT duplicate as a 'system' role in contents
-      tools: [],
+      systemInstruction, 
+      tools:[],
     };
 
+    // Note: Gemini doesn't have a built-in 'urlContext' tool. 
+    // If you need it to read a URL, you should enable googleSearch or pass the URL body in the prompt.
     if (options.mode === "research") {
       config.tools.push({ googleSearch: {} });
-    } else if (options.mode === "url") {
-      config.tools.push({ urlContext: {} });
-    } else {
-      // simple/no external tools to avoid quota/tool clashes
     }
 
-    // Build contents: only include history (mapped) and the current user message.
-    const contents: any[] = [];
+    const contents: any[] =[];
 
-    // Map history -> user/model (map any non-user to "model" to match Gemini SDK)
-    for (const m of history || []) {
+    // Map history -> user/model
+    for (const m of history ||[]) {
       contents.push({
-        role: m.role === "user" ? "user" : "model", // <<--- FIXED: map assistant -> model
+        role: m.role === "user" ? "user" : "model",
         parts: [{ text: m.content }],
       });
     }
 
-    // Current user message; if no history, include India knowledge bases as context
     const userParts: any[] = [{ text: message }];
     if (!history || history.length === 0) {
       userParts[0].text = `Context: Ground your response in these knowledge bases where applicable: ${INDIA_KNOWLEDGE_BASES.join(
@@ -203,28 +179,17 @@ export class GeminiService {
         config,
       });
 
-      let text = "";
-      const candidate = response?.candidates?.[0] || null;
-
-      if (candidate?.content) {
-        const parts = candidate.content.parts || [];
-        text = parts.map((p: any) => p.text || "").join("\n");
-      }
-
-      if (!text && response?.text) text = response.text;
-
-      if (!text && candidate?.output?.[0]?.content) {
-        text = candidate.output.map((o: any) => o.content || "").join("\n");
-      }
+      // The SDK provides a convenient .text getter that stitches parts together automatically
+      let text = response.text;
 
       if (!text) {
         text = "I'm sorry — I couldn't generate a response.";
       }
 
-      const chunks =
-        candidate?.groundingMetadata?.groundingChunks ||
-        candidate?.grounding?.chunks ||
-        [];
+      // Handle Google Search Grounding Metadata
+      const candidate = response?.candidates?.[0];
+      const chunks = candidate?.groundingMetadata?.groundingChunks ||[];
+      
       if (chunks && chunks.length > 0) {
         const sources = chunks
           .filter((c: any) => c.web?.uri)
@@ -243,4 +208,4 @@ export class GeminiService {
       );
     }
   }
-  }
+}
