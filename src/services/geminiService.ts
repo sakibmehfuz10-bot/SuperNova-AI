@@ -63,7 +63,7 @@ export class GeminiService {
   private ai: GoogleGenAI;
 
   constructor() {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY || "";
     if (!apiKey) {
       console.warn("Gemini API key is missing. Please set VITE_GEMINI_API_KEY or GEMINI_API_KEY.");
     }
@@ -100,7 +100,7 @@ export class GeminiService {
     message: string, 
     history: Message[], 
     options: { 
-      model: string; 
+      model?: string; 
       mode?: string;
       useThinking?: boolean;
       depth?: string;
@@ -110,7 +110,12 @@ export class GeminiService {
       npcPersona?: string;
     }
   ) {
-    let modelName = options.model;
+    let modelName = options.model || "gemini-3-flash-preview";
+    
+    // Ensure we are not using deprecated models
+    if (modelName === "gemini-1.5-flash" || modelName === "gemini-1.5-pro" || modelName === "gemini-pro") {
+      modelName = "gemini-3-flash-preview";
+    }
     
     let systemInstruction = options.npcPersona || SYSTEM_PROMPT;
     if (!options.npcPersona && (options.depth || options.tone || options.format)) {
