@@ -1,18 +1,20 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import Database from "better-sqlite3";
 import session from "express-session";
 import bcrypt from "bcryptjs";
 import path from "path";
 import { fileURLToPath } from "url";
-import dotenv from "dotenv"; // .env লোড করার জন্য
-import { GoogleGenAI } from "@google/genai"; // এআই এর জন্য
+import dotenv from "dotenv";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const db = new Database("supernova.db");
 
-// --- আপনার ডাটাবেস টেবিল তৈরির কোড (আগের মতোই থাকবে) ---
+// Vercel-এ শুধুমাত্র /tmp ডিরেক্টরিতে ফাইল রাইট করা যায়। 
+// (সতর্কতা: Vercel-এ এই ডাটাবেসটি স্থায়ী হবে না, রিস্টার্ট হলে মুছে যাবে)
+const dbPath = process.env.NODE_ENV === "production" ? "/tmp/supernova.db" : "supernova.db";
+const db = new Database(dbPath);
+
+// --- ডাটাবেস টেবিল তৈরি ---
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,75 +57,63 @@ db.exec(`
   );
 `);
 
-// --- জেমিনি এআই ইনিশিয়ালাইজেশন (সংশোধিত) ---
-// নতুন SDK অনুযায়ী apiKey একটি অবজেক্টের ভেতরে পাস করতে হয়
+// --- জেমিনি এআই ইনিশিয়ালাইজেশন ---
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
-async function startServer() {
-  const app = express();
-  
-  // PORT কে String থেকে Number এ কনভার্ট করা হলো যাতে TypeScript এরর না দেয়
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const app = express();
 
-  app.use(express.json());
-  app.use(session({
-    secret: "supernova-secret-key",
-    resave: false,
-    saveUninitialized: false,
-    cookie: { 
-      secure: false, 
-      sameSite: 'lax',
-      maxAge: 1000 * 60 * 60 * 24 * 7 
-    }
-  }));
-
-  // --- ১. আপনার নতুন AI API Route (সংশোধিত) ---
-  app.post("/api/generate", async (req, res) => {
-    try {
-      const { prompt } = req.body;
-      
-      // নতুন @google/genai SDK অনুযায়ী API কল
-      const response = await genAI.models.generateContent({
-        model: "gemini-1.5-flash-8b",
-        contents: prompt
-      });
-      
-      // নতুন SDK তে text একটি প্রপার্টি, ফাংশন (text()) নয়
-      res.json({ success: true, text: response.text });
-      
-    } catch (error) {
-      console.error('AI Error:', error);
-      res.status(500).json({ error: "এআই রেসপন্স দিতে সমস্যা হচ্ছে।" });
-    }
-  });
-
-  // --- ২. আপনার আগের সব Auth Routes ---
-  app.post("/api/auth/signup", async (req, res) => { /* আপনার কোড */ });
-  app.post("/api/auth/login", async (req, res) => { /* আপনার কোড */ });
-  app.get("/api/auth/me", (req, res) => { /* আপনার কোড */ });
-  app.post("/api/auth/logout", (req, res) => { /* আপনার কোড */ });
-
-  // --- ৩. আপনার চ্যাট, টাস্ক এবং প্রেফারেন্স রাউটস ---
-  app.get("/api/chats", (req, res) => { /* আপনার কোড */ });
-  app.get("/api/tasks", (req, res) => { /* আপনার কোড */ });
-
-  // --- ৪. Vite এবং স্ট্যাটিক ফাইল হ্যান্ডলিং (Render/Vercel এর জন্য) ---
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.join(__dirname, "dist")));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
-    });
+app.use(express.json());
+app.use(session({
+  secret: "supernova-secret-key",
+  resave: false,
+  saveUninitialized: false,
+  cookie: { 
+    secure: process.env.NODE_ENV === "production", // Vercel-এ true হবে
+    sameSite: 'lax',
+    maxAge: 1000 * 60 * 60 * 24 * 7 
   }
+}));
 
+// --- ১. AI API Route ---
+app.post("/api/generate", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    
+    const response = await genAI.models.generateContent({
+      model: "gemini-1.5-flash-8b",
+      contents: prompt
+    });
+    
+    res.json({ success: true, text: response.text });
+    
+  } catch (error) {
+    console.error('AI Error:', error);
+    res.status(500).json({ error: "এআই রেসপন্স দিতে সমস্যা হচ্ছে।" });
+  }
+});
+
+// --- ২. Auth Routes (আপনার আগের কোড এখানে বসাবেন) ---
+app.post("/api/auth/signup", async (req, res) => { /* আপনার কোড */ });
+app.post("/api/auth/login", async (req, res) => { /* আপনার কোড */ });
+app.get("/api/auth/me", (req, res) => { /* আপনার কোড */ });
+app.post("/api/auth/logout", (req, res) => { /* আপনার কোড */ });
+
+// --- ৩. চ্যাট, টাস্ক এবং প্রেফারেন্স রাউটস (আপনার আগের কোড এখানে বসাবেন) ---
+app.get("/api/chats", (req, res) => { /* আপনার কোড */ });
+app.get("/api/tasks", (req, res) => { /* আপনার কোড */ });
+
+
+// --- ৪. Vercel Serverless Export ---
+// Vercel-এ Vite middleware বা app.listen() কাজ করে না, তাই সেগুলো বাদ দেওয়া হয়েছে।
+// Vercel নিজে থেকেই ফ্রন্টএন্ড (dist) সার্ভ করবে।
+
+if (process.env.NODE_ENV !== "production") {
+  // শুধুমাত্র আপনার লোকাল কম্পিউটারে রান করার জন্য
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`✅ SuperNova Server running on http://localhost:${PORT}`);
   });
 }
 
-startServer();
+// Vercel-এর জন্য Express App-টিকে Export করতে হবে
+export default app;
