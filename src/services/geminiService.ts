@@ -186,4 +186,4 @@ export class GeminiService {
       throw error;
     }
   }
-        }
+}
