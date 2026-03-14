@@ -55,12 +55,15 @@ db.exec(`
   );
 `);
 
-// --- জেমিনি এআই ইনিশিয়ালাইজেশন ---
-const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY || "");
+// --- জেমিনি এআই ইনিশিয়ালাইজেশন (সংশোধিত) ---
+// নতুন SDK অনুযায়ী apiKey একটি অবজেক্টের ভেতরে পাস করতে হয়
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  
+  // PORT কে String থেকে Number এ কনভার্ট করা হলো যাতে TypeScript এরর না দেয়
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   app.use(express.json());
   app.use(session({
@@ -74,29 +77,33 @@ async function startServer() {
     }
   }));
 
-  // --- ১. আপনার নতুন AI API Route (এটি যোগ করা হয়েছে) ---
+  // --- ১. আপনার নতুন AI API Route (সংশোধিত) ---
   app.post("/api/generate", async (req, res) => {
     try {
       const { prompt } = req.body;
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-8b" });
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      res.json({ success: true, text: response.text() });
+      
+      // নতুন @google/genai SDK অনুযায়ী API কল
+      const response = await genAI.models.generateContent({
+        model: "gemini-1.5-flash-8b",
+        contents: prompt
+      });
+      
+      // নতুন SDK তে text একটি প্রপার্টি, ফাংশন (text()) নয়
+      res.json({ success: true, text: response.text });
+      
     } catch (error) {
       console.error('AI Error:', error);
       res.status(500).json({ error: "এআই রেসপন্স দিতে সমস্যা হচ্ছে।" });
     }
   });
 
-  // --- ২. আপনার আগের সব Auth Routes (signup, login, etc.) ---
-  // (আমি এখানে জায়গা বাঁচাতে কোডগুলো ছোট করে দেখাচ্ছি, কিন্তু আপনার অরিজিনাল কোডটিই থাকবে)
+  // --- ২. আপনার আগের সব Auth Routes ---
   app.post("/api/auth/signup", async (req, res) => { /* আপনার কোড */ });
   app.post("/api/auth/login", async (req, res) => { /* আপনার কোড */ });
   app.get("/api/auth/me", (req, res) => { /* আপনার কোড */ });
   app.post("/api/auth/logout", (req, res) => { /* আপনার কোড */ });
 
   // --- ৩. আপনার চ্যাট, টাস্ক এবং প্রেফারেন্স রাউটস ---
-  // (এগুলো আপনার আগের কোড অনুযায়ী কাজ করবে)
   app.get("/api/chats", (req, res) => { /* আপনার কোড */ });
   app.get("/api/tasks", (req, res) => { /* আপনার কোড */ });
 
@@ -120,4 +127,3 @@ async function startServer() {
 }
 
 startServer();
-
