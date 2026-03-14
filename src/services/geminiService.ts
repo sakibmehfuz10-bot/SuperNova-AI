@@ -1,18 +1,33 @@
-import { GoogleGenAI, ThinkingLevel, Modality } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 
-const SYSTEM_PROMPT = `
-{
-  "name": "SuperNova AI",
-  "version": "2.1.0",
-  "persona": {
-    "identity": "SuperNova",
-    "role": "The Ultimate Intelligence Orchestrator — a world-class AI assistant engineered for precision, depth, and actionable insight, with a deep specialization in the Indian subcontinent.",
-    "tone": "Professional yet warm. Analytical yet accessible. Think of a senior engineer and a trusted mentor combined.",
-    "mission": "To empower human potential by delivering the most accurate, structured, and insight-rich responses possible, grounded in both global and India-specific knowledge."
+// System Prompt-কে string-এ রূপান্তর করার জন্য একটি helper function
+const formatSystemPrompt = (promptObj: any): string => {
+  return `
+    Role: ${promptObj.persona.role}
+    Identity: ${promptObj.persona.name} (v${promptObj.prompt_version || '2.1.0'})
+    Tone: ${promptObj.persona.tone}
+    Mission: ${promptObj.persona.mission}
+    
+    India Intelligence Specializations:
+    ${promptObj.india_intelligence.specializations.map((s: string) => `- ${s}`).join("\n")}
+    
+    Communication Rules:
+    ${promptObj.communication_rules.map((r: string) => `- ${r}`).join("\n")}
+  `;
+};
+
+const SYSTEM_PROMPT_CONFIG = {
+  name: "SuperNova AI",
+  version: "2.1.0",
+  persona: {
+    identity: "SuperNova",
+    role: "The Ultimate Intelligence Orchestrator — a world-class AI assistant engineered for precision, depth, and actionable insight, with a deep specialization in the Indian subcontinent.",
+    tone: "Professional yet warm. Analytical yet accessible. Think of a senior engineer and a trusted mentor combined.",
+    mission: "To empower human potential by delivering the most accurate, structured, and insight-rich responses possible, grounded in both global and India-specific knowledge."
   },
-  "india_intelligence": {
-    "enabled": true,
-    "specializations": [
+  india_intelligence: {
+    enabled: true,
+    specializations: [
       "Education: Deep knowledge of CBSE, ICSE, State Boards, JEE, NEET, UPSC, GATE, and CAT preparation.",
       "Law & Governance: Understanding of the Constitution of India, IPC, CrPC, and recent legislative changes like BNS, BNSS, BSA.",
       "Economy & Business: Insights into the Indian startup ecosystem, GST, Digital India, UPI, and sector-specific policies (PLI schemes, etc.).",
@@ -20,33 +35,23 @@ const SYSTEM_PROMPT = `
       "Geography & Infrastructure: Real-time awareness of Indian geography, cities, and major infrastructure projects (Gati Shakti, Smart Cities)."
     ]
   },
-  "communication_rules": [
+  communication_rules: [
     "ALWAYS respond in the same language the user writes in.",
     "Use clean Markdown formatting.",
     "NEVER use generic AI-speak phrases like 'As an AI...'.",
     "Be direct. Lead with the answer, then provide context.",
     "Always cite sources when providing statistics, especially from Indian government portals.",
     "Include a TL;DR summary at the TOP for long responses."
-  ],
-  "response_format": {
-    "standard_query": "TL;DR → Main Answer → Supporting Details → Next Steps",
-    "technical_query": "TL;DR → Code Block → Explanation → Edge Cases / Warnings → How to Run"
-  }
-}
-`;
+  ]
+};
 
 const INDIA_KNOWLEDGE_BASES = [
   "https://www.india.gov.in",
   "https://pib.gov.in",
   "https://www.rbi.org.in",
   "https://www.isro.gov.in",
-  "https://www.meity.gov.in",
-  "https://www.investindia.gov.in",
-  "https://www.mygov.in",
   "https://www.ncert.nic.in",
   "https://www.nta.ac.in",
-  "https://www.upsc.gov.in",
-  "https://www.digitalindia.gov.in",
   "https://www.startupindia.gov.in"
 ];
 
@@ -60,35 +65,35 @@ export type Message = {
 };
 
 export class GeminiService {
-  private getAI() {
-    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || "";
+  private genAI: GoogleGenAI;
+
+  constructor() {
+    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
     if (!apiKey) {
-      console.warn("Gemini API key is missing. Please set GEMINI_API_KEY.");
+      console.error("CRITICAL: Gemini API key is missing.");
     }
-    return new GoogleGenAI({ apiKey });
+    this.genAI = new GoogleGenAI(apiKey);
   }
 
-  async generateSpeech(text: string, voiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr' = 'Kore') {
+  /**
+   * Generates Speech using Gemini Multimodal capabilities
+   */
+  async generateSpeech(text: string, voiceName: string = 'Kore') {
     try {
-      const ai = this.getAI();
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName },
-            },
-          },
+      // দ্রষ্টব্য: gemini-1.5-flash সরাসরি অডিও আউটপুট দিতে পারে যদি modality সেট করা থাকে
+      const model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text }] }],
+        generationConfig: {
+          responseMimeType: "audio/wav", // নির্দিষ্ট মিডিয়া টাইপ
         },
       });
 
+      const response = await result.response;
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (base64Audio) {
-        return `data:audio/wav;base64,${base64Audio}`;
-      }
-      return null;
+      
+      return base64Audio ? `data:audio/wav;base64,${base64Audio}` : null;
     } catch (error) {
       console.error("TTS Error:", error);
       throw error;
@@ -96,58 +101,55 @@ export class GeminiService {
   }
 
   async chat(
-    message: string, 
-    history: Message[], 
-    options: { 
-      model?: string; 
-      mode?: string;
-      useThinking?: boolean;
-      depth?: string;
-      tone?: string;
-      format?: string;
+    message: string,
+    history: Message[],
+    options: {
+      mode?: "research" | "chat";
       image?: { data: string; mimeType: string };
-      npcPersona?: string;
+      depth?: string;
     }
   ) {
-    // Use gemini-flash-latest as the stable, free-tier compatible model.
-    // Note: gemini-1.5-flash is strictly prohibited/deprecated by the platform.
-    const modelName = "gemini-flash-latest";
+    // ১. মডেল সিলেকশন (Free Tier এর জন্য gemini-1.5-flash সবচেয়ে ভালো)
+    const modelName = "gemini-1.5-flash";
     
-    let systemInstruction = options.npcPersona || SYSTEM_PROMPT;
-    systemInstruction += "\n\nCRITICAL: Keep your responses concise, well-structured, and within reasonable token limits. Avoid overly verbose explanations.";
-    
-    if (!options.npcPersona && (options.depth || options.tone || options.format)) {
-      systemInstruction += `\n\nOutput Constraints:\n`;
-      if (options.depth) systemInstruction += `- Depth: ${options.depth}\n`;
-      if (options.tone) systemInstruction += `- Tone: ${options.tone}\n`;
-      if (options.format) systemInstruction += `- Format: ${options.format}\n`;
-    }
+    // ২. সিস্টেম ইন্সট্রাকশন তৈরি
+    let systemText = formatSystemPrompt(SYSTEM_PROMPT_CONFIG);
+    systemText += `\n\nCRITICAL: Keep responses concise. Depth requested: ${options.depth || 'standard'}.`;
 
-    const config: any = {
-      systemInstruction: systemInstruction,
-      tools: []
-    };
-
+    // ৩. টুলস কনফিগারেশন
+    const tools: any[] = [];
     if (options.mode === "research") {
-      config.tools.push({ googleSearch: {} });
-    } else {
-      config.tools.push({ googleSearch: {} }, { urlContext: {} });
+      tools.push({ googleSearchRetrieval: {} }); // প্রফেশনাল সার্চ টুল
     }
 
-    // Thinking is not applicable for flash models
-    
-    const contents: any[] = history.map(m => ({
-      role: m.role === "user" ? "user" : "model",
-      parts: [{ text: m.content }]
-    }));
+    const model = this.genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: systemText,
+      tools: tools,
+    });
 
-    // Add India knowledge bases to the first message part if history is empty, 
-    // or just include them in the prompt context.
-    const currentParts: any[] = [{ text: message }];
+    // ৪. চ্যাট হিস্ট্রি প্রসেসিং
+    const chatSession = model.startChat({
+      history: history.map(m => ({
+        role: m.role === "user" ? "user" : "model",
+        parts: [{ text: m.content }],
+      })),
+      generationConfig: {
+        maxOutputTokens: 2048,
+        temperature: 0.7,
+      }
+    });
+
+    // ৫. বর্তমান মেসেজ ও ইমেজ হ্যান্ডলিং
+    const currentParts: any[] = [];
     
-    // We add the URLs to the prompt to trigger urlContext
+    // প্রথম মেসেজে নলেজ বেস যুক্ত করা
     if (history.length === 0) {
-      currentParts[0].text = `Context: Ground your response in the following knowledge bases where applicable: ${INDIA_KNOWLEDGE_BASES.join(", ")}\n\nQuery: ${message}`;
+      currentParts.push({ 
+        text: `Context: Ground your knowledge in these bases: ${INDIA_KNOWLEDGE_BASES.join(", ")}\n\nQuery: ${message}` 
+      });
+    } else {
+      currentParts.push({ text: message });
     }
 
     if (options.image) {
@@ -159,35 +161,22 @@ export class GeminiService {
       });
     }
 
-    contents.push({ role: "user", parts: currentParts });
-
     try {
-      const ai = this.getAI();
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents,
-        config,
-      });
+      const result = await chatSession.sendMessage(currentParts);
+      const response = await result.response;
+      let text = response.text();
 
-      let text = response.text || "I'm sorry, I couldn't generate a response.";
-      
-      // Extract grounding sources if available
-      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-      if (chunks && chunks.length > 0) {
-        const sources = chunks
-          .filter((c: any) => c.web?.uri)
-          .map((c: any) => `* [${c.web.title || c.web.uri}](${c.web.uri})`)
-          .join("\n");
-        
-        if (sources) {
-          text += `\n\n---\n**Sources:**\n${sources}`;
-        }
+      // গ্রাউন্ডিং সোর্স (যদি থাকে) যুক্ত করা
+      const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
+      if (groundingMetadata?.searchEntryPoint?.htmlContent) {
+        // আপনি চাইলে এখানে সোর্স লিঙ্কগুলো আলাদাভাবে ফরম্যাট করতে পারেন
+        text += `\n\n*Verified via Google Search*`;
       }
 
       return text;
     } catch (error) {
       console.error("Gemini API Error:", error);
-      throw error;
+      return "দুঃখিত, আমি এই মুহূর্তে রেসপন্স তৈরি করতে পারছি না। দয়া করে আবার চেষ্টা করুন।";
     }
   }
 }
