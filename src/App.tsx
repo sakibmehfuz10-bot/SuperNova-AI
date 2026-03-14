@@ -612,7 +612,7 @@ const SuperNovaApp = () => {
     setOutputDepth, setOutputTone, setOutputFormat
   } = useChat();
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' ? window.innerWidth > 768 : true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [advancedOptionsOpen, setAdvancedOptionsOpen] = useState(false);
   const [theme, setTheme] = useState("classic");
@@ -652,6 +652,13 @@ const SuperNovaApp = () => {
         });
     }
   }, [user]);
+
+  const handleNavigation = (view: typeof currentView) => {
+    setCurrentView(view);
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      setSidebarOpen(false);
+    }
+  };
 
   const onRenameChat = async (chatId: number) => {
     await renameChat(chatId, editTitle);
@@ -789,11 +796,24 @@ const SuperNovaApp = () => {
 
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
       
+      {/* Sidebar Overlay for Mobile */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 md:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
       <motion.aside
         initial={false}
         animate={{ width: sidebarOpen ? 260 : 0, opacity: sidebarOpen ? 1 : 0 }}
-        className="flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--border-main)] overflow-hidden whitespace-nowrap"
+        className="flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--border-main)] overflow-hidden whitespace-nowrap absolute md:relative z-40 h-full"
       >
         <div className="p-5 flex items-center gap-3 border-b border-[var(--border-main)]">
           <h1 className="text-lg font-serif font-semibold tracking-tight">
@@ -804,7 +824,7 @@ const SuperNovaApp = () => {
         <button 
           onClick={() => {
             createNewChat();
-            setCurrentView("chat");
+            handleNavigation("chat");
           }}
           className="mx-3 mt-4 mb-2 p-3 flex items-center gap-2 bg-[var(--bg-main)] border border-[var(--border-main)] rounded-xl hover:shadow-md transition-all group"
         >
@@ -813,7 +833,7 @@ const SuperNovaApp = () => {
         </button>
 
         <button 
-          onClick={() => setCurrentView("tasks")}
+          onClick={() => handleNavigation("tasks")}
           className={`mx-3 mb-2 p-3 flex items-center gap-2 rounded-xl transition-all group ${currentView === "tasks" ? "bg-[var(--accent-main)] text-white shadow-md" : "bg-[var(--bg-main)] border border-[var(--border-main)] hover:shadow-md"}`}
         >
           <ListTodo className={`w-4 h-4 ${currentView === "tasks" ? "text-white" : "text-[var(--accent-main)]"}`} />
@@ -821,7 +841,7 @@ const SuperNovaApp = () => {
         </button>
 
         <button 
-          onClick={() => setCurrentView("about")}
+          onClick={() => handleNavigation("about")}
           className={`mx-3 mb-4 p-3 flex items-center gap-2 rounded-xl transition-all group ${currentView === "about" ? "bg-[var(--accent-main)] text-white shadow-md" : "bg-[var(--bg-main)] border border-[var(--border-main)] hover:shadow-md"}`}
         >
           <Info className={`w-4 h-4 ${currentView === "about" ? "text-white" : "text-[var(--accent-main)]"}`} />
@@ -829,7 +849,7 @@ const SuperNovaApp = () => {
         </button>
 
         <button 
-          onClick={() => setCurrentView("game")}
+          onClick={() => handleNavigation("game")}
           className={`mx-3 mb-4 p-3 flex items-center gap-2 rounded-xl transition-all group ${currentView === "game" ? "bg-[var(--accent-main)] text-white shadow-md" : "bg-[var(--bg-main)] border border-[var(--border-main)] hover:shadow-md"}`}
         >
           <Gamepad className={`w-4 h-4 ${currentView === "game" ? "text-white" : "text-[var(--accent-main)]"}`} />
@@ -837,7 +857,7 @@ const SuperNovaApp = () => {
         </button>
 
         <button 
-          onClick={() => setCurrentView("research")}
+          onClick={() => handleNavigation("research")}
           className={`mx-3 mb-4 p-3 flex items-center gap-2 rounded-xl transition-all group ${currentView === "research" ? "bg-[var(--accent-main)] text-white shadow-md" : "bg-[var(--bg-main)] border border-[var(--border-main)] hover:shadow-md"}`}
         >
           <Search className={`w-4 h-4 ${currentView === "research" ? "text-white" : "text-[var(--accent-main)]"}`} />
@@ -845,7 +865,7 @@ const SuperNovaApp = () => {
         </button>
 
         <button 
-          onClick={() => setCurrentView("landing")}
+          onClick={() => handleNavigation("landing")}
           className={`mx-3 mb-4 p-3 flex items-center gap-2 rounded-xl transition-all group ${currentView === "landing" ? "bg-[var(--accent-main)] text-white shadow-md" : "bg-[var(--bg-main)] border border-[var(--border-main)] hover:shadow-md"}`}
         >
           <Sparkles className={`w-4 h-4 ${currentView === "landing" ? "text-white" : "text-[var(--accent-main)]"}`} />
@@ -859,7 +879,7 @@ const SuperNovaApp = () => {
               key={item.id}
               onClick={() => {
                 loadChat(item.id);
-                setCurrentView("chat");
+                handleNavigation("chat");
               }}
               className={`w-full text-left p-3 rounded-xl transition-colors group flex items-center gap-2 cursor-pointer ${
                 activeChatId === item.id ? "bg-[var(--accent-main)]/10" : "hover:bg-[var(--accent-main)]/5"
@@ -925,7 +945,7 @@ const SuperNovaApp = () => {
           <div className="pt-2">
             {user ? (
               <div 
-                onClick={() => setCurrentView("profile")}
+                onClick={() => handleNavigation("profile")}
                 className={`flex items-center gap-3 p-2 rounded-xl transition-colors cursor-pointer group ${currentView === "profile" ? "bg-[var(--accent-main)]/10 border border-[var(--accent-main)]/20" : "hover:bg-[var(--border-main)]"}`}
               >
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--accent-main)] to-[var(--accent-secondary)] flex items-center justify-center text-white text-xs font-bold">
@@ -939,7 +959,7 @@ const SuperNovaApp = () => {
                   onClick={(e) => {
                     e.stopPropagation();
                     logout();
-                    setCurrentView("chat");
+                    handleNavigation("chat");
                   }} 
                   className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-all"
                 >
@@ -982,15 +1002,15 @@ const SuperNovaApp = () => {
         ) : (
           <>
             {/* Topbar */}
-            <header className="h-[52px] px-4 flex items-center gap-3 bg-[var(--bg-main)] border-b border-[var(--border-main)] z-10">
+            <header className="h-[52px] px-4 flex items-center gap-3 bg-[var(--bg-main)] border-b border-[var(--border-main)] z-10 overflow-x-auto whitespace-nowrap no-scrollbar">
           <button 
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 hover:bg-[var(--border-main)] rounded-lg text-[var(--text-muted)] transition-colors"
+            className="p-2 hover:bg-[var(--border-main)] rounded-lg text-[var(--text-muted)] transition-colors flex-shrink-0"
           >
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="flex items-center gap-1 bg-[var(--sidebar-bg)] p-1 rounded-full border border-[var(--border-main)]">
+          <div className="flex items-center gap-1 bg-[var(--sidebar-bg)] p-1 rounded-full border border-[var(--border-main)] flex-shrink-0">
             {MODELS.map(m => (
               <button
                 key={m.id}
@@ -1009,7 +1029,7 @@ const SuperNovaApp = () => {
 
           <button
             onClick={() => setUseThinking(!useThinking)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ml-2 ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ml-2 flex-shrink-0 ${
               useThinking 
                 ? "bg-[var(--accent-main)]/10 text-[var(--accent-main)] border border-[var(--accent-main)]/30" 
                 : "text-[var(--text-muted)] hover:bg-[var(--border-main)] border border-transparent"
@@ -1021,7 +1041,7 @@ const SuperNovaApp = () => {
 
           <button
             onClick={() => setIntelligenceMode(intelligenceMode === "research" ? "general" : "research")}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ml-2 ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ml-2 flex-shrink-0 ${
               intelligenceMode === "research" 
                 ? "bg-[var(--accent-main)]/10 text-[var(--accent-main)] border border-[var(--accent-main)]/30" 
                 : "text-[var(--text-muted)] hover:bg-[var(--border-main)] border border-transparent"
@@ -1033,7 +1053,7 @@ const SuperNovaApp = () => {
 
           <button
             onClick={() => setAdvancedOptionsOpen(true)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ml-2 ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ml-2 flex-shrink-0 ${
               advancedOptionsOpen 
                 ? "bg-[var(--accent-main)]/10 text-[var(--accent-main)] border border-[var(--accent-main)]/30" 
                 : "text-[var(--text-muted)] hover:bg-[var(--border-main)] border border-transparent"
@@ -1045,7 +1065,7 @@ const SuperNovaApp = () => {
 
           <button
             onClick={() => setArtifactOpen(!artifactOpen)}
-            className={`ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+            className={`ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex-shrink-0 ${
               artifactOpen 
                 ? "bg-[var(--accent-main)]/10 text-[var(--accent-main)] border-[var(--accent-main)]/30" 
                 : "text-[var(--text-muted)] border-[var(--border-main)] hover:bg-[var(--border-main)]"

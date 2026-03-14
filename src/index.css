@@ -103,6 +103,16 @@
   background: var(--accent-main);
 }
 
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
 .markdown-body {
   @apply text-sm leading-relaxed font-sans;
 }
