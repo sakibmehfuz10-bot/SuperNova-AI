@@ -1,6 +1,5 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Logo } from "./Logo";
 import { Globe, Languages, Zap, Brain, Search, Sparkles, ChevronRight } from 'lucide-react';
 
 export const LandingPage: React.FC<{ onGetStarted: () => void }> = ({ onGetStarted }) => {
@@ -14,7 +13,6 @@ export const LandingPage: React.FC<{ onGetStarted: () => void }> = ({ onGetStart
           className="max-w-3xl"
         >
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-main)]/10 text-[var(--accent-main)] text-sm font-bold mb-6">
-            <Logo className="w-6 h-6" />
             <span>India's AI Revolution</span>
           </div>
           <h1 className="text-5xl md:text-7xl font-serif font-bold tracking-tight mb-6">

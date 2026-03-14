@@ -1,14 +1,41 @@
-import { GoogleGenAI } from "@google/genai";
-
-const DEFAULT_MODEL = "gemini-1.5-flash-8b";
-const DEFAULT_TTS_MODEL = "gemini-1.5-flash"; // Flash model is best for audio generation
+import { GoogleGenAI, ThinkingLevel, Modality } from "@google/genai";
 
 const SYSTEM_PROMPT = `
-{name: "SuperNova AI", version: "2.1.0"}
-# (Shortened for runtime; keep full JSON in dev)
+{
+  "name": "SuperNova AI",
+  "version": "2.1.0",
+  "persona": {
+    "identity": "SuperNova",
+    "role": "The Ultimate Intelligence Orchestrator — a world-class AI assistant engineered for precision, depth, and actionable insight, with a deep specialization in the Indian subcontinent.",
+    "tone": "Professional yet warm. Analytical yet accessible. Think of a senior engineer and a trusted mentor combined.",
+    "mission": "To empower human potential by delivering the most accurate, structured, and insight-rich responses possible, grounded in both global and India-specific knowledge."
+  },
+  "india_intelligence": {
+    "enabled": true,
+    "specializations": [
+      "Education: Deep knowledge of CBSE, ICSE, State Boards, JEE, NEET, UPSC, GATE, and CAT preparation.",
+      "Law & Governance: Understanding of the Constitution of India, IPC, CrPC, and recent legislative changes like BNS, BNSS, BSA.",
+      "Economy & Business: Insights into the Indian startup ecosystem, GST, Digital India, UPI, and sector-specific policies (PLI schemes, etc.).",
+      "Culture & Language: Native-level understanding of Indian culture, traditions, and major languages (Hindi, Bengali, Tamil, etc.).",
+      "Geography & Infrastructure: Real-time awareness of Indian geography, cities, and major infrastructure projects (Gati Shakti, Smart Cities)."
+    ]
+  },
+  "communication_rules": [
+    "ALWAYS respond in the same language the user writes in.",
+    "Use clean Markdown formatting.",
+    "NEVER use generic AI-speak phrases like 'As an AI...'.",
+    "Be direct. Lead with the answer, then provide context.",
+    "Always cite sources when providing statistics, especially from Indian government portals.",
+    "Include a TL;DR summary at the TOP for long responses."
+  ],
+  "response_format": {
+    "standard_query": "TL;DR → Main Answer → Supporting Details → Next Steps",
+    "technical_query": "TL;DR → Code Block → Explanation → Edge Cases / Warnings → How to Run"
+  }
+}
 `;
 
-const INDIA_KNOWLEDGE_BASES =[
+const INDIA_KNOWLEDGE_BASES = [
   "https://www.india.gov.in",
   "https://pib.gov.in",
   "https://www.rbi.org.in",
@@ -25,7 +52,7 @@ const INDIA_KNOWLEDGE_BASES =[
 
 export type Message = {
   id: string;
-  role: "user" | "assistant"; 
+  role: "user" | "assistant";
   content: string;
   time: string;
   isThinking?: boolean;
@@ -34,46 +61,23 @@ export type Message = {
 
 export class GeminiService {
   private ai: GoogleGenAI;
-  private apiKey: string;
 
   constructor() {
-    this.apiKey =
-      (import.meta.env as any).VITE_GEMINI_API_KEY ||
-      (import.meta.env as any).GEMINI_API_KEY ||
-      "";
-      
-    console.log("Using API Key:", this.apiKey ? "Found" : "Missing");
-    
-    if (!this.apiKey) {
-      console.warn(
-        "Gemini API key is missing. Please set VITE_GEMINI_API_KEY or GEMINI_API_KEY."
-      );
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY || "";
+    console.log("Using API Key:", apiKey ? "Found" : "Missing");
+    if (!apiKey) {
+      console.warn("Gemini API key is missing. Please set VITE_GEMINI_API_KEY or GEMINI_API_KEY.");
     }
-    this.ai = new GoogleGenAI({ apiKey: this.apiKey });
+    this.ai = new GoogleGenAI({ apiKey });
   }
 
-  /**
-   * Generate speech (TTS)
-   */
-  async generateSpeech(
-    text: string,
-    voiceName: "Puck" | "Charon" | "Kore" | "Fenrir" | "Zephyr" = "Kore",
-    opts?: { model?: string }
-  ) {
-    const ttsModel = opts?.model || DEFAULT_TTS_MODEL;
-
+  async generateSpeech(text: string, voiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr' = 'Kore') {
     try {
       const response = await this.ai.models.generateContent({
-        model: ttsModel,
-        contents: [
-          {
-            role: "user",
-            parts:[{ text: `Please speak the following text:\n\n${text}` }],
-          },
-        ],
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text }] }],
         config: {
-          // Use string literal "AUDIO" to prevent enum export issues
-          responseModalities: ["AUDIO"], 
+          responseModalities: [Modality.AUDIO],
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: { voiceName },
@@ -82,95 +86,82 @@ export class GeminiService {
         },
       });
 
-      const candidate = response?.candidates?.[0];
-      if (!candidate) return null;
-
-      let base64Audio: string | undefined;
-
-      // Extract Base64 Audio natively
-      const parts = candidate.content?.parts ||[];
-      for (const p of parts) {
-        if (p.inlineData?.data) {
-          base64Audio = p.inlineData.data;
-          break;
-        }
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        return `data:audio/wav;base64,${base64Audio}`;
       }
-
-      if (!base64Audio) {
-        console.warn("No audio payload found in TTS response", candidate);
-        return null;
-      }
-
-      return `data:audio/wav;base64,${base64Audio}`;
-    } catch (error: any) {
-      console.error("TTS Error:", error?.message ?? error);
-      throw new Error(
-        `TTS failed: ${error?.message ?? "unknown error"}. Check model/access.`
-      );
+      return null;
+    } catch (error) {
+      console.error("TTS Error:", error);
+      throw error;
     }
   }
 
-  /**
-   * Chat / generate text (general)
-   */
   async chat(
-    message: string,
-    history: Message[],
-    options: {
-      model?: string;
-      mode?: "research" | "url" | "simple";
+    message: string, 
+    history: Message[], 
+    options: { 
+      model?: string; 
+      mode?: string;
       useThinking?: boolean;
       depth?: string;
       tone?: string;
       format?: string;
       image?: { data: string; mimeType: string };
       npcPersona?: string;
-    } = {}
+    }
   ) {
-    const modelName = options.model || DEFAULT_MODEL;
-
+    // Use gemini-flash-latest as the stable, free-tier compatible model.
+    // Note: gemini-1.5-flash is strictly prohibited/deprecated by the platform.
+    const modelName = "gemini-flash-latest";
+    
     let systemInstruction = options.npcPersona || SYSTEM_PROMPT;
-    systemInstruction +=
-      "\n\nCRITICAL: Keep responses concise and within reasonable token limits.";
+    systemInstruction += "\n\nCRITICAL: Keep your responses concise, well-structured, and within reasonable token limits. Avoid overly verbose explanations.";
+    
+    if (!options.npcPersona && (options.depth || options.tone || options.format)) {
+      systemInstruction += `\n\nOutput Constraints:\n`;
+      if (options.depth) systemInstruction += `- Depth: ${options.depth}\n`;
+      if (options.tone) systemInstruction += `- Tone: ${options.tone}\n`;
+      if (options.format) systemInstruction += `- Format: ${options.format}\n`;
+    }
 
     const config: any = {
-      systemInstruction, 
-      tools:[],
+      systemInstruction: systemInstruction,
+      tools: []
     };
 
-    // Note: Gemini doesn't have a built-in 'urlContext' tool. 
-    // If you need it to read a URL, you should enable googleSearch or pass the URL body in the prompt.
     if (options.mode === "research") {
       config.tools.push({ googleSearch: {} });
+    } else {
+      config.tools.push({ googleSearch: {} }, { urlContext: {} });
     }
 
-    const contents: any[] =[];
+    // Thinking is not applicable for flash models
+    
+    const contents: any[] = history.map(m => ({
+      role: m.role === "user" ? "user" : "model",
+      parts: [{ text: m.content }]
+    }));
 
-    // Map history -> user/model
-    for (const m of history ||[]) {
-      contents.push({
-        role: m.role === "user" ? "user" : "model",
-        parts: [{ text: m.content }],
-      });
-    }
-
-    const userParts: any[] = [{ text: message }];
-    if (!history || history.length === 0) {
-      userParts[0].text = `Context: Ground your response in these knowledge bases where applicable: ${INDIA_KNOWLEDGE_BASES.join(
-        ", "
-      )}\n\nQuery: ${message}`;
+    // Add India knowledge bases to the first message part if history is empty, 
+    // or just include them in the prompt context.
+    const currentParts: any[] = [{ text: message }];
+    
+    // We add the URLs to the prompt to trigger urlContext
+    if (history.length === 0) {
+      currentParts[0].text = `Context: Ground your response in the following knowledge bases where applicable: ${INDIA_KNOWLEDGE_BASES.join(", ")}\n\nQuery: ${message}`;
     }
 
     if (options.image) {
-      userParts.push({
+      currentParts.push({
         inlineData: {
           data: options.image.data,
-          mimeType: options.image.mimeType,
-        },
+          mimeType: options.image.mimeType
+        }
       });
     }
 
-    contents.push({ role: "user", parts: userParts });
+    contents.push({ role: "user", parts: currentParts });
 
     try {
       const response = await this.ai.models.generateContent({
@@ -179,33 +170,25 @@ export class GeminiService {
         config,
       });
 
-      // The SDK provides a convenient .text getter that stitches parts together automatically
-      let text = response.text;
-
-      if (!text) {
-        text = "I'm sorry — I couldn't generate a response.";
-      }
-
-      // Handle Google Search Grounding Metadata
-      const candidate = response?.candidates?.[0];
-      const chunks = candidate?.groundingMetadata?.groundingChunks ||[];
+      let text = response.text || "I'm sorry, I couldn't generate a response.";
       
+      // Extract grounding sources if available
+      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
       if (chunks && chunks.length > 0) {
         const sources = chunks
           .filter((c: any) => c.web?.uri)
-          .map((c: any) => `* ${c.web.title || c.web.uri} — ${c.web.uri}`)
+          .map((c: any) => `* [${c.web.title || c.web.uri}](${c.web.uri})`)
           .join("\n");
+        
         if (sources) {
-          text += `\n\n---\nSources:\n${sources}`;
+          text += `\n\n---\n**Sources:**\n${sources}`;
         }
       }
 
       return text;
-    } catch (error: any) {
-      console.error("Gemini API Error:", error?.message ?? error);
-      throw new Error(
-        `Gemini API Error: ${error?.message ?? "unknown error"}. Check API key, model name, and tool permissions.`
-      );
+    } catch (error) {
+      console.error("Gemini API Error:", error);
+      throw error;
     }
   }
 }
