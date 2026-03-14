@@ -5,8 +5,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-
 type NPC = {
   id: string;
   name: string;
@@ -97,6 +95,7 @@ export const NPCs: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         parts: [{ text: m.content }]
       }));
 
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || "" });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: [...history, { role: "user", parts: [{ text: userMsg.content }] }],

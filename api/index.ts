@@ -3,6 +3,7 @@ import session from "express-session";
 import bcrypt from "bcryptjs";
 
 const app = express();
+app.set("trust proxy", 1);
 
 // In-memory data stores (replacing database)
 let users: any[] = [];
@@ -22,8 +23,9 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production', // Vercel uses HTTPS
-    sameSite: 'lax',
+    secure: true,
+    sameSite: 'none',
+    httpOnly: true,
     maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
   }
 }));

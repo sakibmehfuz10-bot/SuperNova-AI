@@ -37,7 +37,8 @@ import {
   VolumeX,
   Info,
   SlidersHorizontal,
-  Gamepad
+  Gamepad,
+  AlertCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
@@ -605,7 +606,7 @@ const SuperNovaApp = () => {
   const { 
     chatHistory, activeChatId, messages, isTyping, selectedModel, useThinking,
     uploadedImage, isImageLoading, activeArtifact, artifactOpen, intelligenceMode,
-    outputDepth, outputTone, outputFormat,
+    outputDepth, outputTone, outputFormat, isQuotaExceeded,
     loadChat, createNewChat, renameChat, deleteChat, handleSend, handleImageUpload,
     setUploadedImage, setSelectedModel, setUseThinking, setArtifactOpen, setActiveArtifact,
     setActiveChatId, setMessages, setIntelligenceMode,
@@ -1026,6 +1027,20 @@ const SuperNovaApp = () => {
               </button>
             ))}
           </div>
+
+          {isQuotaExceeded && (
+            <button
+              onClick={async () => {
+                if ((window as any).aistudio?.openSelectKey) {
+                  await (window as any).aistudio.openSelectKey();
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ml-2 flex-shrink-0 bg-red-500 text-white shadow-md hover:bg-red-600"
+            >
+              <AlertCircle className="w-3.5 h-3.5" />
+              Fix Quota (Add Key)
+            </button>
+          )}
 
           <button
             onClick={() => setUseThinking(!useThinking)}

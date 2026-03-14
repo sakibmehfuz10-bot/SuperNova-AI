@@ -12,7 +12,7 @@ export const ResearchMoodFutures: React.FC<{ onBack: () => void; onToggleSidebar
     setLoading(true);
     setError(null);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || "" });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: 'What are the current research trends and future predictions for AI in India? Use Google Search to provide up-to-date information.',

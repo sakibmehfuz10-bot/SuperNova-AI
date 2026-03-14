@@ -60,20 +60,18 @@ export type Message = {
 };
 
 export class GeminiService {
-  private ai: GoogleGenAI;
-
-  constructor() {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY || "";
-    console.log("Using API Key:", apiKey ? "Found" : "Missing");
+  private getAI() {
+    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || "";
     if (!apiKey) {
-      console.warn("Gemini API key is missing. Please set VITE_GEMINI_API_KEY or GEMINI_API_KEY.");
+      console.warn("Gemini API key is missing. Please set GEMINI_API_KEY.");
     }
-    this.ai = new GoogleGenAI({ apiKey });
+    return new GoogleGenAI({ apiKey });
   }
 
   async generateSpeech(text: string, voiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr' = 'Kore') {
     try {
-      const response = await this.ai.models.generateContent({
+      const ai = this.getAI();
+      const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text }] }],
         config: {
@@ -164,7 +162,8 @@ export class GeminiService {
     contents.push({ role: "user", parts: currentParts });
 
     try {
-      const response = await this.ai.models.generateContent({
+      const ai = this.getAI();
+      const response = await ai.models.generateContent({
         model: modelName,
         contents,
         config,

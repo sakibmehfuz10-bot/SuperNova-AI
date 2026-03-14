@@ -186,6 +186,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode; user: any }> = 
 
     setMessages(prev => [...prev, userMsg]);
     setIsTyping(true);
+    setIsQuotaExceeded(false);
     const currentImage = uploadedImage;
     setUploadedImage(null);
 
