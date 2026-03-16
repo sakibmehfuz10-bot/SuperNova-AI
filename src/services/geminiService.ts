@@ -22,7 +22,7 @@ const SYSTEM_PROMPT = {
   "communication_rules": [
     "ALWAYS respond in the same language the user writes in.",
     "Use clean Markdown formatting.",
-    "NEVER use generic AI-speak phrases like 'As an AI...'.",
+    "NEVER use generic AI-speak phrases like \'As an AI...\'.",
     "Be direct. Lead with the answer, then provide context.",
     "Always cite sources when providing statistics, especially from Indian government portals.",
     "Include a TL;DR summary at the TOP for long responses."
@@ -62,24 +62,40 @@ export class GeminiService {
     const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || "";
     if (!apiKey) {
       console.warn("Gemini API key is missing. Please set GEMINI_API_KEY.");
+      throw new Error("API_KEY_MISSING");
     }
     return new GoogleGenAI(apiKey);
+  }
+
+  private async retryOperation<T>(operation: () => Promise<T>, retries: number = 3, delay: number = 1000): Promise<T> {
+    try {
+      return await operation();
+    } catch (error: any) {
+      if (retries > 0 && (error.status === 429 || (error.status >= 500 && error.status < 600))) {
+        console.warn(`Retrying after ${delay}ms due to error: ${error.message}`);
+        await new Promise(res => setTimeout(res, delay));
+        return this.retryOperation(operation, retries - 1, delay * 2);
+      } else {
+        throw error;
+      }
+    }
   }
 
   async generateSpeech(text: string, voiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr' = 'Kore') {
     try {
       const ai = this.getAI();
-      // Updated to 1.5-flash for consistency, although TTS often uses specific preview models
-      const response = await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
-        contents: [{ parts: [{ text }] }],
-        generationConfig: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName },
+      const response = await this.retryOperation(async () => {
+        return await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
+          contents: [{ parts: [{ text }] }],
+          generationConfig: {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName },
+              },
             },
           },
-        },
+        });
       });
 
       const base64Audio = response.response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
@@ -87,9 +103,9 @@ export class GeminiService {
         return `data:audio/wav;base64,${base64Audio}`;
       }
       return null;
-    } catch (error) {
+    } catch (error: any) {
       console.error("TTS Error:", error);
-      throw error;
+      throw { code: error.status || 500, message: error.message || "Text-to-speech failed", retriable: error.status === 429 || (error.status >= 500 && error.status < 600) };
     }
   }
 
@@ -107,10 +123,8 @@ export class GeminiService {
       npcPersona?: string;
     }
   ) {
-    // ✅ Updated to gemini-1.5-flash as per your request
     const modelName = "gemini-1.5-flash";
 
-    // Handling systemInstruction stringification to avoid [object Object] error
     let systemInstruction = options.npcPersona || JSON.stringify(SYSTEM_PROMPT);
     systemInstruction += "\n\nCRITICAL: Keep your responses concise, well-structured, and within reasonable token limits. Avoid overly verbose explanations.";
 
@@ -145,29 +159,32 @@ export class GeminiService {
 
     try {
       const ai = this.getAI();
-      const model = ai.getGenerativeModel({ 
+      const model = ai.getGenerativeModel({
         model: modelName,
-        systemInstruction: systemInstruction 
+        systemInstruction: systemInstruction
       });
 
-      // Configuring tools based on mode
       const tools: any = [];
       if (options.mode === "research") {
         tools.push({ googleSearch: {} });
       } else {
-        // Standard tools configuration for 1.5-flash
         tools.push({ googleSearch: {} });
       }
 
-      const result = await model.generateContent({
-        contents,
-        tools,
+      const result = await this.retryOperation(async () => {
+        return await model.generateContent({
+          contents,
+          tools,
+        });
       });
 
       const response = result.response;
-      let text = response.text() || "I'm sorry, I couldn't generate a response.";
+      let text = response.text();
 
-      // Extract grounding sources
+      if (!text) {
+        throw new Error("Empty response from Gemini API");
+      }
+
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
       if (chunks && chunks.length > 0) {
         const sources = chunks
@@ -181,9 +198,9 @@ export class GeminiService {
       }
 
       return text;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Gemini API Error:", error);
-      throw error;
+      throw { code: error.status || 500, message: error.message || "Gemini chat failed", retriable: error.status === 429 || (error.status >= 500 && error.status < 600) };
     }
   }
 }

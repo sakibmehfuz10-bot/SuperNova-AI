@@ -1,8 +1,14 @@
+import 'dotenv/config';
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import apiApp from "./api/index.js";
+
+if (!process.env.GEMINI_API_KEY) {
+  console.error("FATAL ERROR: GEMINI_API_KEY is not set. Please set this environment variable.");
+  process.exit(1);
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
