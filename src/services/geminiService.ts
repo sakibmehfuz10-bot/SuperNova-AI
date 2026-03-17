@@ -1,6 +1,7 @@
 import { GoogleGenAI, ThinkingLevel, Modality } from "@google/genai";
 
-const SYSTEM_PROMPT = {
+const SYSTEM_PROMPT = `
+{
   "name": "SuperNova AI",
   "version": "2.1.0",
   "persona": {
@@ -22,7 +23,7 @@ const SYSTEM_PROMPT = {
   "communication_rules": [
     "ALWAYS respond in the same language the user writes in.",
     "Use clean Markdown formatting.",
-    "NEVER use generic AI-speak phrases like \'As an AI...\'.",
+    "NEVER use generic AI-speak phrases like 'As an AI...'.",
     "Be direct. Lead with the answer, then provide context.",
     "Always cite sources when providing statistics, especially from Indian government portals.",
     "Include a TL;DR summary at the TOP for long responses."
@@ -31,7 +32,8 @@ const SYSTEM_PROMPT = {
     "standard_query": "TL;DR → Main Answer → Supporting Details → Next Steps",
     "technical_query": "TL;DR → Code Block → Explanation → Edge Cases / Warnings → How to Run"
   }
-};
+}
+`;
 
 const INDIA_KNOWLEDGE_BASES = [
   "https://www.india.gov.in",
@@ -62,58 +64,42 @@ export class GeminiService {
     const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || "";
     if (!apiKey) {
       console.warn("Gemini API key is missing. Please set GEMINI_API_KEY.");
-      throw new Error("API_KEY_MISSING");
     }
-    return new GoogleGenAI(apiKey);
-  }
-
-  private async retryOperation<T>(operation: () => Promise<T>, retries: number = 3, delay: number = 1000): Promise<T> {
-    try {
-      return await operation();
-    } catch (error: any) {
-      if (retries > 0 && (error.status === 429 || (error.status >= 500 && error.status < 600))) {
-        console.warn(`Retrying after ${delay}ms due to error: ${error.message}`);
-        await new Promise(res => setTimeout(res, delay));
-        return this.retryOperation(operation, retries - 1, delay * 2);
-      } else {
-        throw error;
-      }
-    }
+    return new GoogleGenAI({ apiKey });
   }
 
   async generateSpeech(text: string, voiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr' = 'Kore') {
     try {
       const ai = this.getAI();
-      const response = await this.retryOperation(async () => {
-        return await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
-          contents: [{ parts: [{ text }] }],
-          generationConfig: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName },
-              },
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName },
             },
           },
-        });
+        },
       });
 
-      const base64Audio = response.response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         return `data:audio/wav;base64,${base64Audio}`;
       }
       return null;
-    } catch (error: any) {
+    } catch (error) {
       console.error("TTS Error:", error);
-      throw { code: error.status || 500, message: error.message || "Text-to-speech failed", retriable: error.status === 429 || (error.status >= 500 && error.status < 600) };
+      throw error;
     }
   }
 
   async chat(
-    message: string,
-    history: Message[],
-    options: {
-      model?: string;
+    message: string, 
+    history: Message[], 
+    options: { 
+      model?: string; 
       mode?: string;
       useThinking?: boolean;
       depth?: string;
@@ -123,11 +109,13 @@ export class GeminiService {
       npcPersona?: string;
     }
   ) {
-    const modelName = "gemini-1.5-flash";
-
-    let systemInstruction = options.npcPersona || JSON.stringify(SYSTEM_PROMPT);
+    // Use gemini-flash-latest as the stable, free-tier compatible model.
+    // Note: gemini-1.5-flash is strictly prohibited/deprecated by the platform.
+    const modelName = "gemini-flash-latest";
+    
+    let systemInstruction = options.npcPersona || SYSTEM_PROMPT;
     systemInstruction += "\n\nCRITICAL: Keep your responses concise, well-structured, and within reasonable token limits. Avoid overly verbose explanations.";
-
+    
     if (!options.npcPersona && (options.depth || options.tone || options.format)) {
       systemInstruction += `\n\nOutput Constraints:\n`;
       if (options.depth) systemInstruction += `- Depth: ${options.depth}\n`;
@@ -135,13 +123,29 @@ export class GeminiService {
       if (options.format) systemInstruction += `- Format: ${options.format}\n`;
     }
 
+    const config: any = {
+      systemInstruction: systemInstruction,
+      tools: []
+    };
+
+    if (options.mode === "research") {
+      config.tools.push({ googleSearch: {} });
+    } else {
+      config.tools.push({ googleSearch: {} }, { urlContext: {} });
+    }
+
+    // Thinking is not applicable for flash models
+    
     const contents: any[] = history.map(m => ({
       role: m.role === "user" ? "user" : "model",
       parts: [{ text: m.content }]
     }));
 
+    // Add India knowledge bases to the first message part if history is empty, 
+    // or just include them in the prompt context.
     const currentParts: any[] = [{ text: message }];
-
+    
+    // We add the URLs to the prompt to trigger urlContext
     if (history.length === 0) {
       currentParts[0].text = `Context: Ground your response in the following knowledge bases where applicable: ${INDIA_KNOWLEDGE_BASES.join(", ")}\n\nQuery: ${message}`;
     }
@@ -159,48 +163,31 @@ export class GeminiService {
 
     try {
       const ai = this.getAI();
-      const model = ai.getGenerativeModel({
+      const response = await ai.models.generateContent({
         model: modelName,
-        systemInstruction: systemInstruction
+        contents,
+        config,
       });
 
-      const tools: any = [];
-      if (options.mode === "research") {
-        tools.push({ googleSearch: {} });
-      } else {
-        tools.push({ googleSearch: {} });
-      }
-
-      const result = await this.retryOperation(async () => {
-        return await model.generateContent({
-          contents,
-          tools,
-        });
-      });
-
-      const response = result.response;
-      let text = response.text();
-
-      if (!text) {
-        throw new Error("Empty response from Gemini API");
-      }
-
+      let text = response.text || "I'm sorry, I couldn't generate a response.";
+      
+      // Extract grounding sources if available
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
       if (chunks && chunks.length > 0) {
         const sources = chunks
           .filter((c: any) => c.web?.uri)
           .map((c: any) => `* [${c.web.title || c.web.uri}](${c.web.uri})`)
           .join("\n");
-
+        
         if (sources) {
           text += `\n\n---\n**Sources:**\n${sources}`;
         }
       }
 
       return text;
-    } catch (error: any) {
+    } catch (error) {
       console.error("Gemini API Error:", error);
-      throw { code: error.status || 500, message: error.message || "Gemini chat failed", retriable: error.status === 429 || (error.status >= 500 && error.status < 600) };
+      throw error;
     }
   }
 }

@@ -1,15 +1,9 @@
 import express from "express";
 import session from "express-session";
-import cors from "cors";
 import bcrypt from "bcryptjs";
 
 const app = express();
 app.set("trust proxy", 1);
-
-app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173", // Allow requests from your frontend URL
-  credentials: true,
-}));
 
 // In-memory data stores (replacing database)
 let users: any[] = [];
@@ -29,8 +23,8 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: true,
+    sameSite: 'none',
     httpOnly: true,
     maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
   }
