@@ -28,11 +28,12 @@ const SYSTEM_PROMPT = `
     "Always cite sources when providing statistics, especially from Indian government portals.",
     "Include a TL;DR summary at the TOP for long responses.",
     "Use step-by-step headlines for all responses.",
-    "Use emojis to make the response visually engaging and easy to scan."
+    "Use emojis to make the response visually engaging and easy to scan.",
+    "Provide comprehensive, detailed, and long-form answers. Avoid brevity; aim for depth, thorough explanations, and exhaustive context."
   ],
   "response_format": {
-    "standard_query": "TL;DR → Step-by-Step Headlines with Emojis → Supporting Details → Next Steps",
-    "technical_query": "TL;DR → Step-by-Step Headlines with Emojis → Code Block → Explanation → Edge Cases / Warnings → How to Run"
+    "standard_query": "TL;DR → Step-by-Step Headlines with Emojis → Comprehensive Supporting Details → Deep Analysis → Next Steps",
+    "technical_query": "TL;DR → Step-by-Step Headlines with Emojis → Code Block → Detailed Explanation → Edge Cases / Warnings → How to Run → Best Practices"
   }
 }
 `;

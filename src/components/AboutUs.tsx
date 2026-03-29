@@ -40,8 +40,18 @@ export const AboutUs: React.FC<{ onBack: () => void; onToggleSidebar?: () => voi
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
-          <div className="bg-[var(--surface-main)] border border-[var(--border-main)] rounded-3xl p-8 shadow-sm hover:shadow-md transition-shadow">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.5 }}
+          className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16"
+        >
+          <motion.div 
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+            className="bg-[var(--surface-main)] border border-[var(--border-main)] rounded-3xl p-8 shadow-sm hover:shadow-md transition-all"
+          >
             <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6">
               <Target className="w-6 h-6" />
             </div>
@@ -49,9 +59,13 @@ export const AboutUs: React.FC<{ onBack: () => void; onToggleSidebar?: () => voi
             <p className="text-[var(--text-muted)] leading-relaxed">
               To democratize access to world-class artificial intelligence, empowering individuals and businesses to solve complex problems, accelerate innovation, and achieve unprecedented productivity through intuitive, intelligent orchestration.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="bg-[var(--surface-main)] border border-[var(--border-main)] rounded-3xl p-8 shadow-sm hover:shadow-md transition-shadow">
+          <motion.div 
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+            className="bg-[var(--surface-main)] border border-[var(--border-main)] rounded-3xl p-8 shadow-sm hover:shadow-md transition-all"
+          >
             <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mb-6">
               <Globe className="w-6 h-6" />
             </div>
@@ -59,10 +73,16 @@ export const AboutUs: React.FC<{ onBack: () => void; onToggleSidebar?: () => voi
             <p className="text-[var(--text-muted)] leading-relaxed">
               To be the cognitive engine that powers the next generation of human-AI collaboration, creating a future where technology seamlessly amplifies human potential and creativity across every domain.
             </p>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
-        <div className="bg-gradient-to-br from-[var(--accent-main)] to-[var(--accent-secondary)] rounded-3xl p-10 text-white shadow-xl mb-16 relative overflow-hidden">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.5 }}
+          className="bg-gradient-to-br from-[var(--accent-main)] to-[var(--accent-secondary)] rounded-3xl p-10 text-white shadow-xl mb-16 relative overflow-hidden"
+        >
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/3" />
           
@@ -92,9 +112,15 @@ export const AboutUs: React.FC<{ onBack: () => void; onToggleSidebar?: () => voi
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="text-center mb-8">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-8"
+        >
           <h2 className="text-2xl font-serif font-bold mb-8">Core Values</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div className="flex flex-col items-center p-6">
@@ -119,8 +145,11 @@ export const AboutUs: React.FC<{ onBack: () => void; onToggleSidebar?: () => voi
               <p className="text-sm text-[var(--text-muted)]">Building AI that serves everyone, regardless of geography or background.</p>
             </div>
           </div>
-        </div>
+        </motion.div>
         
+        <div className="text-center mt-16 pt-8 border-t border-[var(--border-main)] text-[var(--text-muted)] text-sm">
+          Created by Md. Sakib Mehfuz
+        </div>
       </div>
     </motion.div>
   );
